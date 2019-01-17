@@ -28,18 +28,19 @@ class Room: #A collection of tiles. For example the inside of a house or the out
 class Floor: #A property of a tile. For example grass, road or a wall
     def __init__(self,Image,Solid,Colour,Name=""):
         self.Image = Image #The sprite of this floor
-        self.Solid = Solid #If actors can move over this floor
         self.Colour = Colour / 100 #Used in reading the png file
         self.Name = Name
-        
+
+    
 class Tile: #A position in a room. 
-    def __init__(self,x,y,Room,Floor,Actor=None):
+    def __init__(self,x,y,Room,Floor,Actor=None,Block=None):
         self.x = x #X coord within a room
         self.y = y #Y coord within a room
         self.Floor = Floor #Properties of the tile itself
         self.Actor = Actor #The actor standing on this tile. Can be None
         self.Room  = Room #The room the tile is in
-        self.Inventory = np.empty((10),dtype = Item)     
+        self.Inventory = np.empty((10),dtype = Item)
+        self.Block = Block     
         
 class Item:
     def __init__(self,Image,Location=None,Name=""):
@@ -47,18 +48,51 @@ class Item:
         self.Location = Location #The location of the item, on a tile, in a player inventory etc.
         self.Name = Name
         self.ItemId = None #The index of its location in the inventory list
-                  
+
+class Block:
+    def __init__(self,BlockTemp,Tile = None):
+        self.Image = BlockTemp.Image
+        self.SolidN = BlockTemp.SolidN
+        self.SolidW = BlockTemp.SolidW
+        self.SolidE = BlockTemp.SolidE
+        self.SolidS = BlockTemp.SolidS
+        self.SolidM = BlockTemp.SolidM
+        
+        self.Tile = Tile
+        if(Tile != None):
+            MoveBlock(Tile,Block) #Places the block at the tile
+        else:
+            self.x = None
+            self.y = None
+            self.Room = None
+
+class BlockTemplate:
+    def __init__(self,Image,SolidN=True,SolidW=True,SolidE=True,SolidS=True,SolidM=True):
+        self.Image = Image
+        self.SolidN = SolidN #If actors can move through the north of this block
+        self.SolidW = SolidW #If actors can move through the west of this block
+        self.SolidE = SolidE #If actors can move through the east of this block
+        self.SolidS = SolidS #If actors can move through the south of this block
+        self.SolidM = SolidM #If actors can exist on this tile at all
+        #ex. a block can be solid in all directions except M so this block can work as a cage
+
+#-----Actor and Subclasses-----#              
 class Actor: #A living character. A Player, monster, animal etc
     def __init__(self,Tile=None,IntSize = 10):
-        self.Tile = Tile #Tile the actor resides on
-        self.x = Tile.x #x coord of tile in room
-        self.y = Tile.y #y coord of tile in room
-        self.Room = Tile.Room # The room the actor is in
-        self.Tile.Actor  = self #The tile the actor resides on
+
         self.Inventory = np.empty((IntSize),dtype = Item) #List of items the player carries
-        self.IntSize = IntSize
-        self.FreeSpace = IntSize
+        self.IntSize = IntSize #Maximum inventory space
+        self.FreeSpace = IntSize #Amount of free inventory space
         ActorList.append(self) #Ads itself to a global list of all actors
+        
+        self.Tile = Tile #Tile the actor resides on
+        if(Tile != None):
+            MoveActor(Tile,self) #If a tile is given, Move actor to said tile
+            #This also changes atributes in the tile object
+        else:
+            self.Room = None #Done just to initialize these attributes
+            self.x = None
+            self.y = None
         
     def Drop(self,ItemId): #Drops an item on the tile the actor is standing on
         if(self.Tile != None):
@@ -66,7 +100,7 @@ class Actor: #A living character. A Player, monster, animal etc
                 self.FreeSpace += 1
              
     def Move(self,x,y): #Moves the actor to a different tile with coord x,y in the same room
-        MoveActor(x,y,self,self.Room)
+        MoveActorXY(x,y,self,self.Room)
         
     def PickUp(self,ItemId): #Picks up an item with certain ItemId
         item = self.Tile.Inventory[ItemId]
@@ -96,13 +130,19 @@ class Human(Humanoid): #
     
     def DoTurn(self): #The action the actor does during his turn
         self.Behaviour(self)
-        
+#-----Actor and Subclasses-----#     
         
 
 
 #--------Classes--------#     
 
 #--------Functions--------#
+def FindTile(x,y,Room): #Finds the tile with (x,y) coords in a room
+    try:
+       return Room.TileArray[x,y]
+       
+    except IndexError: #Return False when x,y out of bounds
+        return False
 
 def OneRound():
     for actor in ActorList:
@@ -118,27 +158,45 @@ def MoveItem(Item,Destination): #Moves an item to a new location
             return True
     return False
     
-def MoveActor(x,y,Actor,Room): #Moves an actor to a new location
-    
-    try: #Might have to do something more elegant
-        NewTile = Room.TileArray[x,y]
-        if(NewTile.Actor == None): #If the tile is empty of actors
+
+def MoveActor(NewTile,Actor):#Moves actor to a specific tile    
+
+    if(NewTile.Actor == None): #If the tile is empty of actors
+        if(Actor.Tile != None):
             Actor.Tile.Actor = None #Empties the old tile
-            NewTile.Actor = Actor #Places the actor at it's new location
-            Actor.x = x #Puts the information of the tile in the actor
-            Actor.y = y
-            Actor.Room = Room
-            Actor.Tile = NewTile
-            return True
-        else:
-            return False
+        NewTile.Actor = Actor #Places the actor at it's new location
+        Actor.x = NewTile.x #Puts the information of the tile in the actor
+        Actor.y = NewTile.y
+        Actor.Room = NewTile.Room
+        Actor.Tile = NewTile
+        return True
+    else:
+        return False
             
-    except IndexError: #If x,y is out of bounds, will probably check this before using this function
-        return False #Return True when succesfully moved, otherwise return False
+def MoveActorXY(x,y,Actor,Room): #Moves an actor to a new location
+    NewTile = FindTile(x,y,Room)
+    return MoveActor(NewTile,Actor)
+    
+
+def MoveBlock(NewTile,Block): #Moves a block to a different tile
+    
+    #Checks if there isn't already a block or actor at NewTile
+    if(NewTile.Block == None and (NewTile.Actor == None or Block.SolidM == False)):
         
-    
-    
-    
+        if(Block.Tile != None):
+            Block.Tile.Block = None
+        NewTile.Block = Block
+        Block.x = NewTile.x
+        Block.y = NewTile.y
+        Block.Room = NewTile.Room
+        Block.Tile = NewTile
+        return True #Returns True if successful
+    else:
+        return False #Returns False if unsuccessful
+   
+def MoveBlockXY(x,y,Block,Room):
+     NewTile = FindTile(x,y,Room)
+     return MoveBlock(NewTile,Block)
 #--------Functions--------#
 
 #--------GlobalVariables--------#
