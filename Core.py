@@ -5,7 +5,10 @@ from ImageReader import *
 from Behaviour import *
 #--------Classes--------#
 
-class Room: #A collection of tiles. For example the inside of a house or the outside world
+class Room: 
+    #A room is a collection of tiles, ex. the overworld, a cave, etc.
+    #Currently ImageReader can read png images and turn each pixel into a tile
+    #We will probably write something better suited to build rooms
     def __init__(self,FileName):
 
         self.Image = GetImage(ImgPrefix+FileName) #A png image
@@ -25,14 +28,19 @@ class Room: #A collection of tiles. For example the inside of a house or the out
                         
                     
         
-class Floor: #A property of a tile. For example grass, road or a wall
+class Floor: 
+    #Properties of a tile, ex. grass, stone, road
     def __init__(self,Image,Solid,Colour,Name=""):
         self.Image = Image #The sprite of this floor
         self.Colour = Colour / 100 #Used in reading the png file
         self.Name = Name
 
     
-class Tile: #A position in a room. 
+class Tile: 
+    #A Tile is a position in a room
+    #(x,y) is the position of the tile in the room, with x,y integers >= 0
+    #Each tile has a floor, floors contain information like tile image,etc
+    #Each tile can contain an actor, a block and currently 10 items
     def __init__(self,x,y,Room,Floor,Actor=None,Block=None):
         self.x = x #X coord within a room
         self.y = y #Y coord within a room
@@ -43,28 +51,33 @@ class Tile: #A position in a room.
         self.Block = Block     
         
 class Item:
+    #Items are things like weapons, potions, recources
+    #Tiles, blocks and actors have a list called inventory which is where the items are located
+    #ItemId is the index of the item in this list
+    
     def __init__(self,Image,Location=None,Name=""):
         self.Image = Image #Sprite of the item
         self.Location = Location #The location of the item, on a tile, in a player inventory etc.
         self.Name = Name
         self.ItemId = None #The index of its location in the inventory list
 
-class Block:
-    def __init__(self,BlockTemp,Tile = None):
-        self.Image = BlockTemp.Image
-        self.SolidN = BlockTemp.SolidN
-        self.SolidW = BlockTemp.SolidW
-        self.SolidE = BlockTemp.SolidE
-        self.SolidS = BlockTemp.SolidS
-        self.SolidM = BlockTemp.SolidM
-        self.SolidDict = { #Dictionary that couples 
-            (1,0): self.SolidE,
-            (-1,0): self.SolidW,
-            (0,1): self.SolidN,
-            (0,-1): self.SolidS,
-            (0,0): self.SolidM
-            }
-            
+class Block: 
+    #Blocks are things like walls, tables, treestumps, etc
+    #Actors may or may not be able to move through blocks, see variable SolidDict
+    #Each Block contains a tile variable, Each tile may or may not have a block variable
+    #Some block can be used by actors to perform actions, ex. opening a door,sleeping in a bed
+    
+    def __init__(self,SolidDict,Tile = None,):
+        
+        self.SolidDict = SolidDict #Dictionary telling from which side the block is solid
+        #Example dictionary
+        #dict = {
+        # (1,0) = True, #East side
+        # (-1,0) = False, #West side
+        # (0,1) = True, #North side
+        #(0,-1) = False, #South side
+        #(0,0) = False, #Middle, if true actors cant be on this tile at all
+        #} # the above case is the north east corner of a building
         
         self.Tile = Tile
         if(Tile != None):
@@ -74,17 +87,13 @@ class Block:
             self.y = None
             self.Room = None
 
-class BlockTemplate:
-    def __init__(self,Image,SolidN=True,SolidW=True,SolidE=True,SolidS=True,SolidM=True):
-        self.Image = Image
-        self.SolidN = SolidN #If actors can move through the north of this block
-        self.SolidW = SolidW #If actors can move through the west of this block
-        self.SolidE = SolidE #If actors can move through the east of this block
-        self.SolidS = SolidS #If actors can move through the south of this block
-        self.SolidM = SolidM #If actors can exist on this tile at all
-        #ex. a block can be solid in all directions except M so this block can work as a cage
-
-class Request: #
+        
+class Request: 
+    #A request is an action that actors can do, walk, attack, pick up an item
+    #Every actor gets 100 energy per turn
+    #Each round each actor returns requests untill their energy is depleted
+    #In the main IsPossible is run to check if the action is possible
+    #If IsPossible returns true and enough energy is available, Action is run
     def __init__(self):
         pass
     
@@ -96,13 +105,19 @@ class WalkRequest(Request):
         self.x = x
         self.y = y
         
-    def DoWalk(self):
-        pass
+    def IsPossible(self):
+        return CanWalk(Actor,self.x,self.y)
+    
+    def Action(self):
+        Actor.Move(self.x,self.y)
         
 
 
 #-----Actor and Subclasses-----#              
-class Actor: #A living character. A Player, monster, animal etc
+class Actor:
+    #A living character like a human or deer or monster
+    #Actors are located on a certain tile
+    #Actors have a list called inventory which stores items
     def __init__(self,Tile=None,IntSize = 10):
 
         self.Inventory = np.empty((IntSize),dtype = Item) #List of items the player carries
@@ -140,12 +155,14 @@ class Actor: #A living character. A Player, monster, animal etc
         self.FreeSpace = Counter
         
         
-class Humanoid(Actor): #A Human-like creature
+class Humanoid(Actor):
+    #A human-like creature, these actors can do human like stuff like own buildings etc. 
     def __init__(self,Tile=None,IntSize = 10):
         Actor.__init__(self,Tile,IntSize)
         
 
-class Human(Humanoid): #
+class Human(Humanoid): 
+    
     def __init__(self,Image,Tile=None,Name = "",Health = 10,Behaviour = None,IntSize = 10):
         Humanoid.__init__(self,Tile,IntSize)
         self.Image = Image #Sprite of the actor
