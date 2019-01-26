@@ -57,6 +57,14 @@ class Block:
         self.SolidE = BlockTemp.SolidE
         self.SolidS = BlockTemp.SolidS
         self.SolidM = BlockTemp.SolidM
+        self.SolidDict = { #Dictionary that couples 
+            (1,0): self.SolidE,
+            (-1,0): self.SolidW,
+            (0,1): self.SolidN,
+            (0,-1): self.SolidS,
+            (0,0): self.SolidM
+            }
+            
         
         self.Tile = Tile
         if(Tile != None):
@@ -75,6 +83,23 @@ class BlockTemplate:
         self.SolidS = SolidS #If actors can move through the south of this block
         self.SolidM = SolidM #If actors can exist on this tile at all
         #ex. a block can be solid in all directions except M so this block can work as a cage
+
+class Request: #
+    def __init__(self):
+        pass
+    
+class WalkRequest(Request):
+    def __init__(self,x,y,Actor):
+        Request.__init__()
+        self.Energy = 50 #Engergy cost to perform this action
+        self.Actor = Actor
+        self.x = x
+        self.y = y
+        
+    def DoWalk(self):
+        pass
+        
+
 
 #-----Actor and Subclasses-----#              
 class Actor: #A living character. A Player, monster, animal etc
@@ -197,6 +222,32 @@ def MoveBlock(NewTile,Block): #Moves a block to a different tile
 def MoveBlockXY(x,y,Block,Room):
      NewTile = FindTile(x,y,Room)
      return MoveBlock(NewTile,Block)
+     
+def CanWalk(Actor,x,y):#Checks if actor can walk to certain tile
+        
+    dx = x - Actor.x
+    dy = y - Actor.y
+    if(not((dx,dy) in [(1,0),(-1,0),(0,1),(0,-1)])):
+        return False #Checks if new Tile is 1 away from old tile
+        
+    Tile = FindTile(x,y,Actor.Room)
+    if(not(Tile)): #If x,y is outside of room, return False
+        return False
+        
+    if(Tile.Actor != None):
+        return False #If there is already an actor on x,y, return False
+            
+    if(Tile.Block == None):
+        return True #If there is no block on x,y, return True
+            
+        
+    if(Tile.Block.SolidDict[(-dx,-dy)] or Tile.Block.SolidDict[(0,0)]):
+        return False #Checks if the block at x,y is solid in given direction
+    
+    return True
+        
+    
+
 #--------Functions--------#
 
 #--------GlobalVariables--------#
@@ -208,6 +259,7 @@ RoadFloor = Floor(Road_Img,False,np.asarray([71.8,68.6,21.6]),"Road")
 WoodFloor = Floor(Wood_Img,True,np.asarray([40.4,40.4,40.4]),"Wood")
 
 FloorList = [GrassFloor,RoadFloor,WoodFloor]
+
 
 
 #--------GlobalVariables--------#
